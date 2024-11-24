@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Дodgeball Game</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            overflow: hidden;
+            background-color: #f0f0f0;
+        }
+        #gameContainer {
+            position: relative;
+            width: 100vw;
+            height: 95vh;
+            overflow: hidden;
+            background-color: #ddd;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        #gameCanvas {
+            background-color: #fff;
+            border: 2px solid #333;
+        }
+        #timer {
+            position: absolute;
+            top: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 24px;
+            color: #333;
+            background-color: rgba(255, 255, 255, 0.8);
+            padding: 5px 15px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+        #joystick {
+            position: absolute;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            width: 100px;
+            height: 100px;
+            background-color: rgba(50, 50, 50, 0.5);
+            border-radius: 50%;
+            touch-action: none;
+        }
+        #joystickHandle {
+            position: absolute;
+            width: 40px;
+            height: 40px;
+            background-color: #fff;
+            border-radius: 50%;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+        }
+    </style>
+</head>
+<body>
+    <div id="gameContainer">
+        <canvas id="gameCanvas" width="800" height="600"></canvas>
+        <div id="timer">0s</div>
+        <div id="joystick">
+            <div id="joystickHandle"></div>
+        </div>
+    </div>
+    <script>
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+
+        let ball = {
+            x: canvas.width / 2,
+            y: canvas.height / 2,
+            radius: 15,
+            dx: 0,
+            dy: 0,
+            speed: 5
+        };
+
+        let enemies = [];
+        let spawnInterval = 1000;
+        let lastSpawn = -1;
+
+        let startTime = Date.now();
+        let elapsedTime = 0;
+        let isGameOver = false;
+        const joystick = document.getElementById('joystick');
+        const joystickHandle = document.getElementById('joystickHandle');
+        let joystickActive = false;
+        let joystickStartX = 0;
+        let joystickStartY = 0;
+
+        joystick.addEventListener('touchstart', startJoystick, false);
+        joystick.addEventListener('touchmove', moveJoystick, false);
+        joystick.addEventListener('touchend', stopJoystick, false);
+
+        function startJoystick(event) {
+            joystickActive = true;
+            joystickStartX = event.touches[0].clientX;
+            joystickStartY = event.touches[0].clientY;
+        }
+
+        function moveJoystick(event) {
+            if (!joystickActive) return;
+
+            const touch = event.touches[0];
+            const dx = touch.clientX - joystickStartX;
+            const dy = touch.clientY - joystickStartY;
+
+            const distance = Math.min(Math.sqrt(dx * dx + dy * dy), 50);
+
+            const angle = Math.atan2(dy, dx);
+
+            ball.dx = Math.cos(angle) * ball.speed * (distance / 80);
+            ball.dy = Math.sin(angle) * ball.speed * (distance / 80);
+
+            joystickHandle.style.transform = `translate(${Math.cos(angle) * distance}px, ${Math.sin(angle) * distance}px)`;
+        }
+
+        function stopJoystick() {
+            joystickActive = false;
+            ball.dx = 0;
+            ball.dy = 0;
+            joystickHandle.style.transform = 'translate(-50%, -50%)';
+        }
+
+        function generateEnemy() {
+            let enemyType = Math.floor(Math.random() * 3);
+            let enemy;
+            do {
+                enemy = {
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    size: 20 + Math.random() * 30,
+                    type: enemyType,
+                    dx: Math.random() * 2 - 1,
+                    dy: Math.random() * 2 - 1,
+                };
+            } while (Math.hypot(ball.x - enemy.x, ball.y - enemy.y) < 100);
+            enemies.push(enemy);
+        }
+
+        function updatePositions() {
+            ball.x = Math.min(Math.max(ball.x + ball.dx, ball.radius), canvas.width - ball.radius);
+            ball.y = Math.min(Math.max(ball.y + ball.dy, ball.radius), canvas.height - ball.radius);
+
+            enemies.forEach((enemy) => {
+                enemy.x += enemy.dx;
+                enemy.y += enemy.dy;
+
+                if (enemy.x < 0 || enemy.x > canvas.width) enemy.dx *= -1;
+                if (enemy.y < 0 || enemy.y > canvas.height) enemy.dy *= -1;
+            });
+        }
+
+        function detectCollisions() {
+            for (let enemy of enemies) {
+                let dist = Math.hypot(ball.x - enemy.x, ball.y - enemy.y);
+
+                if (dist - ball.radius - enemy.size / 2 < 1) {
+                    isGameOver = true;
+                }
+            }
+        }
+
+        function drawBall() {
+            ctx.beginPath();
+            ctx.arc(ball.x, ball.y, ball.radius, 0, Math.PI * 2);
+            ctx.fillStyle = '#3498db';
+            ctx.fill();
+            ctx.closePath();
+        }
+
+        function drawEnemies() {
+            enemies.forEach((enemy) => {
+                ctx.beginPath();
+                if (enemy.type === 0) {
+                    ctx.rect(enemy.x, enemy.y, enemy.size, enemy.size);
+                } else if (enemy.type === 1) {
+                    ctx.arc(enemy.x, enemy.y, enemy.size / 2, 0, Math.PI * 2);
+                } else {
+                    ctx.moveTo(enemy.x, enemy.y);
+                    ctx.lineTo(enemy.x + enemy.size, enemy.y);
+                    ctx.lineTo(enemy.x + enemy.size / 2, enemy.y - enemy.size);
+                    ctx.closePath();
+                }
+                ctx.fillStyle = '#e74c3c';
+                ctx.fill();
+            });
+        }
+
+        function updateTimer() {
+            if (!isGameOver) {
+                elapsedTime = Math.round((Date.now() - startTime) / 1000);
+                document.getElementById('timer').innerText = elapsedTime + 's';
+            }
+        }
+
+        function gameLoop() {
+            if (isGameOver) return;
+
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            let time = Date.now();
+            if (time > (lastSpawn + spawnInterval)) {
+                lastSpawn = time;
+                generateEnemy();
+            }
+
+            updatePositions();
+            detectCollisions();
+            drawBall();
+            drawEnemies();
+            updateTimer();
+
+            requestAnimationFrame(gameLoop);
+        }
+
+        gameLoop();
+    </script>
+</body>
+</html>
